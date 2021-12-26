@@ -6,7 +6,7 @@
 - Threading support.
 - Extended WAF bypass payloads.
 - Each payload made unique to distinguish which target established connection. First 5 symbols of target's hostname MD5 hash included in the payload.
-- Improved output to handle massive output, implemented logging.
+- Improved logging to handle massive output.
 - Added option to run the 'canary' test against known vulnerable endpoint.
 - Implemented the pattern blacklist to ignore while parsing the target lists.
 
@@ -16,7 +16,8 @@
 $ python3 log4j-scan.py -h
 [•] CVE-2021-44228 - Apache Log4j RCE Scanner
 [•] Scanner provided by FullHunt.io - The Next-Gen Attack Surface Management Platform.
-[•] Secure your External Attack Surface with FullHunt.io.
+[•] Fork created by Sergey Egorov.
+
 usage: log4j-scan.py [-h] [-u URL] [-l USEDLIST] [--request-type REQUEST_TYPE] [--headers-file HEADERS_FILE] [--run-all-tests] [--exclude-user-agent-fuzzing]
                      [--wait-time WAIT_TIME] [--waf-bypass] [--dns-callback-provider DNS_CALLBACK_PROVIDER] [--custom-dns-callback-host CUSTOM_DNS_CALLBACK_HOST]
 

