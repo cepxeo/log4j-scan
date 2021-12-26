@@ -36,7 +36,7 @@ except Exception:
 
 cprint('[•] CVE-2021-44228 - Apache Log4j RCE Scanner', "green")
 cprint('[•] Scanner provided by FullHunt.io - The Next-Gen Attack Surface Management Platform.', "yellow")
-cprint('[•] Fork created by Sergey Egorov.', "yellow")
+cprint('[•] Secure your External Attack Surface with FullHunt.io.', "yellow")
 
 if len(sys.argv) <= 1:
     print('\n%s -h for help.' % (sys.argv[0]))
@@ -162,8 +162,7 @@ parser.add_argument("--threads",
                     action='store')
 parser.add_argument("--test",
                     dest="test_host",
-                    help="A canary host to test before the main list. Logs GET and POST requests examples. Default: http://127.0.0.1:8080",
-                    default="http://127.0.0.1:8080",
+                    help="A canary host to test before the main list. Logs GET and POST requests examples. Example: http://127.0.0.1:8080",
                     action='store')
 
 args = parser.parse_args()
@@ -208,7 +207,7 @@ def generate_waf_bypass_payloads(callback_host, identifier):
     payloads = []
     for i in waf_bypass_payloads:
         new_payload = i.replace("{{callback_host}}", callback_host)
-        new_payload = new_payload.replace("-{{identifier}}", identifier)
+        new_payload = new_payload.replace("{{identifier}}", identifier)
         payloads.append(new_payload)
     return payloads
 
