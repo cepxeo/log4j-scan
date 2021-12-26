@@ -5,7 +5,7 @@
 
 - Threading support.
 - Extended WAF bypass payloads.
-- Each payload made unique to distinguish which target established connection. First 5 symbols of target's hostname MD5 hash included in the payload.
+- Each payload made unique to distinguish which target established connection. First 5 symbols of target's url MD5 hash included in the payload.
 - Improved logging to handle massive output.
 - Added option to run the 'canary' test against known vulnerable endpoint.
 - Implemented the pattern blacklist to ignore while parsing the target lists.
