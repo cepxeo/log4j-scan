@@ -78,6 +78,12 @@ $ python3 log4j-scan.py -u https://log4j.lab.secbot.local --waf-bypass
 $ python3 log4j-scan.py -l urls.txt
 ```
 
+## Extensive scan
+
+```
+$ python3 log4j-scan.py --waf-bypass --run-all-tests --threads 40 --custom-dns-callback-host your.domain.com -l targets.txt
+```
+
 # Installation
 
 ```
